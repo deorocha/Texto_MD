@@ -11,31 +11,48 @@ from textblob import TextBlob
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# Configuração da página
+# Configuração da página com padding mínimo
 st.set_page_config(
     page_title="Analisador de Texto Multidimensional",
     page_icon="🧠",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Carregar CSS personalizado
+# Carregar CSS personalizado com encoding UTF-8
 def load_css():
-    with open('style.css') as f:
-        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    try:
+        with open('style.css', 'r', encoding='utf-8') as f:
+            css_content = f.read()
+            st.markdown(f'<style>{css_content}</style>', unsafe_allow_html=True)
+    except UnicodeDecodeError:
+        # Fallback para latin-1 se UTF-8 falhar
+        with open('style.css', 'r', encoding='latin-1') as f:
+            css_content = f.read()
+            st.markdown(f'<style>{css_content}</style>', unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Erro ao carregar CSS: {e}")
 
 load_css()
 
-# Carregar categorias do JSON
+# Carregar categorias do JSON com encoding UTF-8
 @st.cache_data
 def load_categories():
-    with open('categories.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
+    try:
+        with open('categories.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except UnicodeDecodeError:
+        # Fallback para latin-1 se UTF-8 falhar
+        with open('categories.json', 'r', encoding='latin-1') as f:
+            return json.load(f)
+    except Exception as e:
+        st.error(f"Erro ao carregar categorias: {e}")
+        return {}
 
 categories = load_categories()
 
-# Funções de análise
 def analyze_sentiment(texto):
-    """Analisa o sentimento do texto"""
+    """Analisa o sentimento do texto e retorna informações detalhadas"""
     try:
         blob = TextBlob(texto)
         if any(palavra in texto.lower() for palavra in ['é', 'á', 'ã', 'ç', 'õ']):
@@ -43,7 +60,46 @@ def analyze_sentiment(texto):
             blob = TextBlob(texto_ingles)
     except:
         blob = TextBlob(texto)
-    return blob.sentiment
+    
+    sentiment = blob.sentiment
+    polarity = sentiment.polarity
+    subjectivity = sentiment.subjectivity
+    
+    # Classificação detalhada da polaridade
+    if polarity > 0.3:
+        sentiment_label = "Muito Positivo"
+        sentiment_emoji = "😊"
+        sentiment_color = "#2ecc71"
+        sentiment_description = "Fortemente positivo"
+    elif polarity > 0.1:
+        sentiment_label = "Positivo"
+        sentiment_emoji = "🙂"
+        sentiment_color = "#27ae60"
+        sentiment_description = "Levemente positivo"
+    elif polarity > -0.1:
+        sentiment_label = "Neutro"
+        sentiment_emoji = "😐"
+        sentiment_color = "#f39c12"
+        sentiment_description = "Equilibrado/Neutro"
+    elif polarity > -0.3:
+        sentiment_label = "Negativo"
+        sentiment_emoji = "🙁"
+        sentiment_color = "#e67e22"
+        sentiment_description = "Levemente negativo"
+    else:
+        sentiment_label = "Muito Negativo"
+        sentiment_emoji = "😞"
+        sentiment_color = "#e74c3c"
+        sentiment_description = "Fortemente negativo"
+    
+    return {
+        'polarity': polarity,
+        'subjectivity': subjectivity,
+        'sentiment_label': sentiment_label,
+        'sentiment_emoji': sentiment_emoji,
+        'sentiment_color': sentiment_color,
+        'sentiment_description': sentiment_description
+    }
 
 def analyze_categories(texto, categories):
     """Analisa as categorias no texto"""
@@ -101,9 +157,11 @@ def calculate_axes(percentuais):
         'objetivo': objetivo_percent
     }
 
-def generate_insights(polarity, subjectivity, axes):
+def generate_insights(sentiment_info, axes):
     """Gera insights baseados na análise"""
     insights = []
+    polarity = sentiment_info['polarity']
+    subjectivity = sentiment_info['subjectivity']
     
     # Insights baseados nos eixos
     if axes['pensamento'] > 70:
@@ -151,43 +209,99 @@ if st.button("Analisar Texto"):
         # 1. ANÁLISE DE SENTIMENTO
         st.header("📊 Análise de Sentimento")
         
-        sentiment = analyze_sentiment(texto)
-        polarity = sentiment.polarity
-        subjectivity = sentiment.subjectivity
+        sentiment_info = analyze_sentiment(texto)
+        polarity = sentiment_info['polarity']
+        subjectivity = sentiment_info['subjectivity']
         palavras_count = len(texto.split())
         
         # Métricas de sentimento
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if polarity > 0.1:
-                emoji, status = "😊", "Positivo"
-            elif polarity < -0.1:
-                emoji, status = "😞", "Negativo"
-            else:
-                emoji, status = "😐", "Neutro"
-            st.metric(f"Polaridade {emoji}", f"{polarity:.3f}", status)
-        
+            # Polaridade com classificação detalhada
+            st.metric(
+                f"Polaridade {sentiment_info['sentiment_emoji']}", 
+                f"{polarity:.3f}", 
+                sentiment_info['sentiment_label']
+            )
+            
         with col2:
-            if subjectivity > 0.6:
+            # Subjetividade
+            if subjectivity > 0.7:
                 nivel = "Alta"
-            elif subjectivity > 0.3:
-                nivel = "Média"
+                cor = "#e74c3c"
+            elif subjectivity > 0.4:
+                nivel = "Moderada"
+                cor = "#f39c12"
             else:
                 nivel = "Baixa"
+                cor = "#2ecc71"
             st.metric("Subjetividade", f"{subjectivity:.3f}", nivel)
         
         with col3:
-            st.metric("📝 Palavras", palavras_count)
+            st.metric("📝 Total de Palavras", palavras_count)
+            
+        with col4:
+            # Classificação do sentimento
+            st.metric(
+                "Classificação", 
+                sentiment_info['sentiment_label'],
+                sentiment_info['sentiment_description']
+            )
         
-        # Barra de sentimento visual
-        st.markdown(f"""
-        <div class="sentiment-bar">
-            <div class="sentiment-fill" style="width: {((polarity + 1) / 2) * 100}%">
-                Sentimento: {polarity:.3f} ({status})
+        # Escala de polaridade visual
+        st.subheader("🎯 Escala de Polaridade")
+        
+        # Definir posição na escala baseada na polaridade
+        scale_position = ((polarity + 1) / 2) * 100  # Converter de [-1,1] para [0,100]
+        
+        escala_html = f"""
+        <div style="background: #ecf0f1; border-radius: 15px; padding: 5px; margin: 10px 0; position: relative;">
+            <div style="display: flex; justify-content: space-between; padding: 0 10px; font-weight: bold;">
+                <span style="color: #e74c3c;">😞 Muito Negativo</span>
+                <span style="color: #f39c12;">😐 Neutro</span>
+                <span style="color: #2ecc71;">😊 Muito Positivo</span>
+            </div>
+            <div style="background: linear-gradient(90deg, #e74c3c 0%, #f39c12 50%, #2ecc71 100%); 
+                        border-radius: 10px; height: 20px; margin: 5px 0; position: relative;">
+                <div style="position: absolute; top: -5px; left: {scale_position}%; transform: translateX(-50%); 
+                            background: {sentiment_info['sentiment_color']}; width: 10px; height: 30px; 
+                            border-radius: 5px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                </div>
+            </div>
+            <div style="text-align: center; font-weight: bold; color: {sentiment_info['sentiment_color']}; 
+                        margin-top: 10px; font-size: 1.1rem;">
+                {sentiment_info['sentiment_emoji']} {sentiment_info['sentiment_label']} - {sentiment_info['sentiment_description']}
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """
+        st.markdown(escala_html, unsafe_allow_html=True)
+        
+        # Detalhamento das faixas de polaridade
+        with st.expander("📋 Detalhes das Faixas de Polaridade"):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("""
+                **🔴 Negativo**
+                - **Muito Negativo**: -1.0 a -0.3
+                - **Negativo**: -0.3 a -0.1
+                """)
+                
+            with col2:
+                st.markdown("""
+                **🟡 Neutro**
+                - **Neutro**: -0.1 a +0.1
+                """)
+                
+            with col3:
+                st.markdown("""
+                **🟢 Positivo**
+                - **Positivo**: +0.1 a +0.3
+                - **Muito Positivo**: +0.3 a +1.0
+                """)
+            
+            st.info(f"**Polaridade atual**: {polarity:.3f} → **{sentiment_info['sentiment_label']}**")
 
         # 2. ANÁLISE DOS EIXOS CONCEITUAIS
         st.header("🎯 Análise dos Eixos Conceituais")
@@ -265,7 +379,7 @@ if st.button("Analisar Texto"):
         # 4. INTERPRETAÇÃO E INSIGHTS
         st.header("💡 Insights e Interpretação")
         
-        insights = generate_insights(polarity, subjectivity, axes)
+        insights = generate_insights(sentiment_info, axes)
         for insight in insights:
             st.info(insight)
 
@@ -287,10 +401,19 @@ if st.button("Analisar Texto"):
                 densidade = f"{(total_palavras_chave/palavras_count*100):.1f}%" if palavras_count > 0 else "0%"
                 df_metricas = pd.DataFrame({
                     'Metrica': ['Total de Palavras', 'Palavras-chave Encontradas', 'Densidade de Palavras-chave', 
-                               'Sentimento', 'Subjetividade'],
-                    'Valor': [palavras_count, total_palavras_chave, densidade, f"{polarity:.3f}", f"{subjectivity:.3f}"]
+                               'Sentimento', 'Subjetividade', 'Classificação'],
+                    'Valor': [palavras_count, total_palavras_chave, densidade, 
+                             f"{polarity:.3f}", f"{subjectivity:.3f}", sentiment_info['sentiment_label']]
                 })
                 st.dataframe(df_metricas, use_container_width=True)
+            
+            st.subheader("Detalhamento do Sentimento")
+            st.markdown(f"""
+            - **Valor da Polaridade**: {polarity:.3f}
+            - **Classificação**: {sentiment_info['sentiment_label']}
+            - **Descrição**: {sentiment_info['sentiment_description']}
+            - **Subjetividade**: {subjectivity:.3f} ({'Alta' if subjectivity > 0.7 else 'Moderada' if subjectivity > 0.4 else 'Baixa'})
+            """)
             
             st.subheader("Exemplos de Palavras Encontradas")
             palavras_encontradas = []
@@ -339,8 +462,7 @@ with st.sidebar:
         
         **Russell, S. J., & Norvig, P. (2020). Artificial Intelligence: A Modern Approach (4th ed.). Pearson.**
         """)
-
-st.sidebar.markdown("---")
+    
 st.sidebar.info("""
 **📝 Como usar:**
 1. Cole qualquer texto
