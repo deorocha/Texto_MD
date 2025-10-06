@@ -3,7 +3,7 @@
 
 /* REMOVER TODOS OS ESPAÇOS EXTERNOS */
 div.stApp {
-    margin-top: -50px !important;
+    margin-top: 0px !important;
     padding-top: 0 !important;
 }
 
@@ -308,4 +308,5 @@ section[data-testid="stSidebar"] > div > div:first-child {
 section[data-testid="stSidebar"] h1:first-child {
     margin-top: 0 !important;
     padding-top: 0 !important;
+
 }
