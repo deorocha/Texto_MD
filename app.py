@@ -10,6 +10,8 @@ from collections import defaultdict
 from textblob import TextBlob
 import matplotlib.pyplot as plt
 import pandas as pd
+import PyPDF2
+import io
 
 # Configuração da página com padding mínimo
 st.set_page_config(
@@ -50,6 +52,18 @@ def load_categories():
         return {}
 
 categories = load_categories()
+
+def extract_text_from_pdf(uploaded_file):
+    """Extrai texto de arquivo PDF"""
+    try:
+        pdf_reader = PyPDF2.PdfReader(uploaded_file)
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+        return text
+    except Exception as e:
+        st.error(f"Erro ao extrair texto do PDF: {e}")
+        return ""
 
 def analyze_sentiment(texto):
     """Analisa o sentimento do texto e retorna informações detalhadas"""
@@ -157,6 +171,7 @@ def calculate_axes(percentuais):
         'objetivo': objetivo_percent
     }
 
+
 def generate_insights(sentiment_info, axes):
     """Gera insights baseados na análise"""
     insights = []
@@ -198,11 +213,43 @@ def generate_insights(sentiment_info, axes):
 st.title("Analisador de Texto Multidimensional")
 st.subheader("Análise de Sentimento + Eixos Conceituais para Qualquer Texto")
 
+# Botões de upload e limpar texto
+col1, col2, col3 = st.columns([1, 1, 1])
+
+with col1:
+    uploaded_file = st.file_uploader("📁 Upload texto", type=['txt', 'pdf'], 
+                                   help="Carregue arquivos .txt ou .pdf")
+
+with col2:
+    if st.button("🗑️ Limpar texto"):
+        st.session_state.texto_analise = ""
+        st.rerun()
+
+# Processar arquivo carregado
+if uploaded_file is not None:
+    if uploaded_file.type == "text/plain":
+        # Arquivo TXT
+        texto_carregado = str(uploaded_file.read(), "utf-8")
+        st.session_state.texto_analise = texto_carregado
+    elif uploaded_file.type == "application/pdf":
+        # Arquivo PDF
+        texto_carregado = extract_text_from_pdf(uploaded_file)
+        st.session_state.texto_analise = texto_carregado
+
+# Inicializar variável de texto na session_state se não existir
+if 'texto_analise' not in st.session_state:
+    st.session_state.texto_analise = ""
+
 # Entrada do usuário
-texto = st.text_area("Digite o texto para análise:", height=200, 
+texto = st.text_area("Digite o texto para análise:", 
+                     value=st.session_state.texto_analise,
+                     height=200, 
                      placeholder="Cole ou digite aqui qualquer texto (artigos, discursos, redações, relatórios, etc.)...")
 
-if st.button("Analisar Texto"):
+with col3:
+    analyze_button = st.button("🔍 Analisar Texto")
+
+if analyze_button:
     if not texto:
         st.warning("Por favor, insira um texto para análise.")
     else:
@@ -465,7 +512,9 @@ with st.sidebar:
     
 st.sidebar.info("""
 **📝 Como usar:**
-1. Cole qualquer texto
+1. Cole qualquer texto OU faça upload de arquivo .txt/.pdf
 2. Clique em "Analisar Texto"
 3. Explore os resultados
+
+**🔄 Para limpar:** Use o botão "Limpar texto"
 """)
